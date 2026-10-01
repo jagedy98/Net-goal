@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Torn Travel Tracker</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1d2530;--muted:#66707d;--line:#e2e6eb;--accent:#2f6fed;--good:#1a8f4b;--bad:#c23b3b}
+@media (prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1d222a;--text:#e8ecf1;--muted:#98a2b0;--line:#2b323c;--accent:#6b97ff;--good:#4cc27d;--bad:#ef7070}}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:820px;margin:0 auto;display:grid;gap:14px}
+h1{font-size:20px;margin:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card h2{font-size:15px;margin:0 0 10px}
+.muted{color:var(--muted);font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.big{padding:12px 22px;font-weight:600}
+input,select{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);max-width:100%}
+input[type=number],input[type=text]{width:150px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+tfoot td{font-weight:600}
+.good{color:var(--good)}.bad{color:var(--bad)}
+#status.err{color:var(--bad)}
+.big-number{font-size:22px;font-weight:700}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile{font-size:17px;font-weight:700}
+details summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Torn Travel Tracker</h1>
+  <div id="status" class="muted">Starting...</div>
+
+  <div class="card">
+    <h2>Holdings</h2>
+    <div class="tiles">
+      <div><div class="muted">Monkey plushies</div><div class="tile" id="h-plushy">-</div></div>
+      <div><div class="muted">Ceibo flowers</div><div class="tile" id="h-flower">-</div></div>
+      <div><div class="muted">EDVDs</div><div class="tile" id="h-edvd">-</div></div>
+      <div><div class="muted">Drug packs</div><div class="tile" id="h-dp">-</div></div>
+      <div><div class="muted">Total items</div><div class="tile" id="h-total">-</div></div>
+      <div><div class="muted">Total worth</div><div class="tile good" id="h-worth">-</div></div>
+      <div><div class="muted">EDVDs gained per day</div><div class="tile" id="h-edvd-day">-</div></div>
+      <div><div class="muted">In bank investment</div><div class="tile" id="h-invest">-</div></div>
+      <div><div class="muted">Worth + investment</div><div class="tile good" id="h-all">-</div></div>
+    </div>
+    <div class="muted" id="h-note" style="margin-top:8px"></div>
+    <details style="margin-top:6px"><summary class="muted">What Torn returned (for troubleshooting)</summary>
+      <pre id="h-diag" style="white-space:pre-wrap;word-break:break-all;font-size:12px"></pre></details>
+  </div>
+
+  <details class="card" id="setup">
+    <summary>Setup</summary>
+    <div class="grid" style="margin-top:12px">
+      <label style="grid-column:1/-1">Torn API key
+        <input type="text" id="s-key" style="width:100%" autocomplete="off" spellcheck="false">
+      </label>
+      <label>Items per trip<input type="number" id="s-capacity"></label>
+      <label>Sell value per item<input type="number" id="s-sell"></label>
+      <label>Plushy cost<input type="number" id="s-plushy"></label>
+      <label>Flower cost<input type="number" id="s-flower"></label>
+      <label>Flight cost (round trip)<input type="number" id="s-flight"></label>
+      <label>Profit goal (networth gain)<input type="number" id="s-goal"></label>
+      <label>Goal deadline<input type="date" id="s-deadline"></label>
+      <label>Cost of 1 Xanax<input type="number" id="s-xanax"></label>
+      <label>EDVD value<input type="number" id="s-edvd"></label>
+      <label>Drug pack value<input type="number" id="s-drugpack"></label>
+      <label>Bank investment amount<input type="number" id="s-invest"></label>
+    </div>
+    <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSettings()">Save setup</button></div>
+  </details>
+
+  <div class="card">
+    <h2>Latest trip</h2>
+    <div id="latest" class="muted">No trips yet.</div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary big" onclick="setItem('plushy')">Plushies</button>
+      <button class="primary big" onclick="setItem('flower')">Flowers</button>
+      <input type="number" id="qty" placeholder="Amount (blank = full bag)" style="width:210px">
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button onclick="addTrip()">Add a missed trip</button>
+      <button onclick="removeLatest()">Remove latest trip</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Goal</h2>
+    <div id="goal"></div>
+  </div>
+
+  <div class="card">
+    <h2>Wars</h2>
+    <div class="row">
+      <input type="text" id="war" placeholder="Earnings from this war..." inputmode="numeric">
+      <button class="primary" onclick="addWar()">Record war</button>
+      <button onclick="removeWar()">Undo last war</button>
+    </div>
+    <div class="muted" id="wars-note" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Since you started</h2>
+    <div class="tiles" id="totals"></div>
+    <div class="muted" id="totals-note" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:10px"><button onclick="resetBaseline()">Restart networth comparison</button></div>
+  </div>
+
+  <div class="card">
+    <h2>Stock waiting for the trader</h2>
+    <div class="big-number" id="stock">0 items</div>
+    <div class="muted" id="stock-value"></div>
+    <div class="row" style="margin-top:12px">
+      <input type="text" id="payout" placeholder="Trader paid me..." inputmode="numeric">
+      <input type="number" id="payout-items" placeholder="Items sold (optional)" style="width:190px">
+      <button class="primary" onclick="addSale()">Record payout</button>
+    </div>
+    <div class="muted" style="margin-top:6px">Recording a payout resets the stock counter.</div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <h2 style="margin:0">Report</h2>
+      <select id="range" onchange="render()">
+        <option value="1">Today</option>
+        <option value="7" selected>Last 7 days</option>
+        <option value="30">Last 30 days</option>
+      </select>
+    </div>
+    <div class="scroll"><table id="report"></table></div>
+    <div id="report-notes" class="muted" style="margin-top:10px"></div>
+  </div>
+
+  <details class="card">
+    <summary>Networth breakdown</summary>
+    <div class="scroll" style="margin-top:10px"><table id="nw-table"></table></div>
+  </details>
+
+  <div class="card">
+    <h2>Backup</h2>
+    <div class="muted" style="margin-bottom:10px">Your data is stored in this browser only. Download a backup now and then.</div>
+    <div class="row">
+      <button onclick="downloadBackup()">Download backup</button>
+      <button onclick="document.getElementById('restore').click()">Restore from backup</button>
+      <input type="file" id="restore" accept=".json" style="display:none" onchange="restoreBackup(this)">
+    </div>
+  </div>
+
+  <div class="muted">Keep this tab open while you play so trips are detected. Days follow Torn City Time (UTC).</div>
+</div>
+
+<script>
+const STORE = 'tornTrackerData';
+const POLL_MS = 60000;
+const DEFAULTS = {
+  settings: { key: '', capacity: 28, sell: 31000, plushy: 400, flower: 500, flight: 0, goal: 0, deadline: '2027-01-01', xanax: 0, edvd: 4100000, drugpack: 4100000, invest: 0 },
+  wars: [],
+  trips: [],
+  sales: [],
+  baseline: null,
+  nw: null,
+  inv: null,
+  invSource: null,
+  ids: null
+};
+
+let data = loadData();
+let pollCount = 0;
+let nwError = '';
+let invError = '';
+let invDiag = '';
+let idsTried = false;
+const NAMES = { plushy: 'Monkey Plushie', flower: 'Ceibo Flower', edvd: 'Erotic DVD', drugpack: 'Drug Pack' };
+
+function loadData() {
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE));
+    if (d) return {
+      settings: Object.assign({}, DEFAULTS.settings, d.settings),
+      trips: d.trips || [],
+      sales: d.sales || [],
+      baseline: d.baseline || null,
+      nw: d.nw || null,
+      inv: d.inv || null,
+      invSource: d.invSource || null,
+      ids: d.ids || null,
+      wars: d.wars || []
+    };
+  } catch (e) {}
+  return JSON.parse(JSON.stringify(DEFAULTS));
+}
+
+function saveData() {
+  try { localStorage.setItem(STORE, JSON.stringify(data)); }
+  catch (e) { setStatus('Could not save in this browser. Try downloading a backup.', true); }
+}
+
+function setStatus(msg, isErr) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = isErr ? 'muted err' : 'muted';
+}
+
+const fmt = n => Math.round(n).toLocaleString('en-US');
+const dayOf = ts => new Date(ts * 1000).toISOString().slice(0, 10);
+const nowSec = () => Math.floor(Date.now() / 1000);
+const nwTotal = v => v.total - (v.stockmarket || v.stocks || 0);
+
+/* ---------- setup ---------- */
+function fillSettings() {
+  const s = data.settings;
+  document.getElementById('s-key').value = s.key;
+  document.getElementById('s-capacity').value = s.capacity;
+  document.getElementById('s-sell').value = s.sell;
+  document.getElementById('s-plushy').value = s.plushy;
+  document.getElementById('s-flower').value = s.flower;
+  document.getElementById('s-flight').value = s.flight;
+  document.getElementById('s-goal').value = s.goal;
+  document.getElementById('s-deadline').value = s.deadline;
+  document.getElementById('s-xanax').value = s.xanax;
+  document.getElementById('s-edvd').value = s.edvd;
+  document.getElementById('s-drugpack').value = s.drugpack;
+  document.getElementById('s-invest').value = s.invest;
+}
+
+function saveSettings() {
+  const num = id => Number(document.getElementById(id).value) || 0;
+  data.settings = {
+    key: document.getElementById('s-key').value.trim(),
+    capacity: num('s-capacity'),
+    sell: num('s-sell'),
+    plushy: num('s-plushy'),
+    flower: num('s-flower'),
+    flight: num('s-flight'),
+    goal: num('s-goal'),
+    deadline: document.getElementById('s-deadline').value || DEFAULTS.settings.deadline,
+    xanax: num('s-xanax'),
+    edvd: num('s-edvd'),
+    drugpack: num('s-drugpack'),
+    invest: num('s-invest')
+  };
+  saveData();
+  setStatus('Setup saved.');
+  poll();
+}
+
+/* ---------- watching Torn ---------- */
+async function poll() {
+  const s = data.settings;
+  if (!s.key) { setStatus('Open Setup and paste your Torn API key to start.', true); render(); return; }
+  try {
+    const r = await fetch('https://api.torn.com/user/?selections=travel&key=' + encodeURIComponent(s.key));
+    const j = await r.json();
+    if (j.error) { setStatus('Torn says: ' + j.error.error, true); return; }
+    const t = j.travel || {};
+    // Only count flights going abroad (the flight home is not a new trip)
+    if (t.departed && t.destination !== 'Torn' && !data.trips.some(x => x.departed === t.departed)) {
+      data.trips.push({ departed: t.departed, destination: t.destination, item: null, qty: s.capacity });
+      saveData();
+    }
+    if (pollCount++ % 5 === 0) await pollNetworth();
+    await pollInventoryV2();
+    setStatus('Watching Torn. Last checked ' + new Date().toLocaleTimeString() + '.');
+  } catch (e) {
+    setStatus('Could not reach Torn. Will retry in a minute.', true);
+  }
+  render();
+}
+
+function collectItems(node, out) {
+  if (Array.isArray(node)) { node.forEach(n => collectItems(n, out)); return; }
+  if (node && typeof node === 'object') {
+    const id = node.ID !== undefined ? node.ID : (node.id !== undefined ? node.id : node.item_id);
+    const qty = node.quantity !== undefined ? node.quantity : node.amount;
+    if ((id !== undefined || node.name) && typeof qty === 'number') out.push({ id: Number(id), name: node.name, qty });
+    Object.values(node).forEach(v => { if (v && typeof v === 'object') collectItems(v, out); });
+  }
+}
+
+async function loadIds(key) {
+  try {
+    const j = await (await fetch('https://api.torn.com/torn/?selections=items&key=' + key)).json();
+    const ids = {};
+    Object.keys(j.items || {}).forEach(id => {
+      const n = j.items[id].name;
+      Object.keys(NAMES).forEach(w => { if (n === NAMES[w]) ids[w] = Number(id); });
+    });
+    if (ids.plushy && ids.flower) { data.ids = Object.assign({}, data.ids, ids); saveData(); }
+  } catch (e) {}
+}
+
+async function pollInventory() {
+  const key = encodeURIComponent(data.settings.key);
+  if (!idsTried) { idsTried = true; await loadIds(key); }
+  const urls = {
+    v1: 'https://api.torn.com/user/?selections=inventory&key=' + key,
+    v2: 'https://api.torn.com/v2/user/inventory?key=' + key
+  };
+  const notes = [];
+  for (const src of (data.invSource ? [data.invSource] : ['v1', 'v2'])) {
+    try {
+      const j = await (await fetch(urls[src])).json();
+      if (j.error) { notes.push(src + ': ' + j.error.error); invDiag = JSON.stringify(j).slice(0, 600); continue; }
+      const list = [];
+      collectItems(j, list);
+      if (!list.length) { notes.push(src + ': no item list found'); invDiag = JSON.stringify(j).slice(0, 600); continue; }
+      const ids = data.ids || {};
+      const count = w => list.filter(e => e.name === NAMES[w] || (ids[w] && e.id === ids[w])).reduce((n, e) => n + e.qty, 0);
+      const prev = data.inv;
+      const now = { ts: nowSec(), plushy: count('plushy'), flower: count('flower') };
+      now.peak = Math.max((prev && prev.peak) || 0, now.plushy + now.flower);
+      const t = latestTrip();
+      if (prev && t && nowSec() - t.departed < 4 * 3600) {
+        const dp = now.plushy - prev.plushy, df = now.flower - prev.flower;
+        if (dp > 0 || df > 0) {
+          t.auto = t.auto || { plushy: 0, flower: 0 };
+          if (dp > 0) t.auto.plushy += dp;
+          if (df > 0) t.auto.flower += df;
+          t.qty = t.auto.plushy + t.auto.flower;
+          t.item = t.auto.plushy && t.auto.flower ? 'mixed' : (t.auto.plushy ? 'plushy' : 'flower');
+        }
+      }
+      data.inv = now;
+      data.invSource = src;
+      invError = '';
+      invDiag = JSON.stringify(j).slice(0, 600);
+      saveData();
+      return;
+    } catch (e) { notes.push(src + ': could not connect'); }
+  }
+  data.invSource = null;
+  invError = 'Could not read inventory (' + notes.join('; ') + ').';
+}
+
+function addWar() {
+  const el = document.getElementById('war');
+  const amount = Number(el.value.replace(/[,\s$]/g, ''));
+  if (!amount || amount < 0) { setStatus('Type the war earnings first.', true); return; }
+  data.wars.push({ ts: nowSec(), amount });
+  el.value = '';
+  saveData();
+  render();
+}
+
+function removeWar() {
+  if (!data.wars.length || !confirm('Remove the last recorded war?')) return;
+  data.wars.pop();
+  saveData();
+  render();
+}
+
+function renderWars() {
+  const s = data.settings;
+  const money = n => (n < 0 ? '-$' : '$') + fmt(Math.abs(n));
+  const count = data.wars.length;
+  const gross = data.wars.reduce((n, w) => n + w.amount, 0);
+  const xan = count * 4 * s.xanax;
+  let note = count
+    ? count + ' war(s): earned ' + money(gross) + ', Xanax cost ' + money(xan) + ' (4 per war), net ' + money(gross - xan) +
+      ', average net per war ' + money((gross - xan) / count) + '.'
+    : 'No wars recorded yet.';
+  if (!s.xanax) note += ' Set the cost of 1 Xanax in Setup so it is subtracted.';
+  document.getElementById('wars-note').textContent = note;
+}
+
+function renderGoal() {
+  const s = data.settings, n = data.nw, b = data.baseline;
+  const el = document.getElementById('goal');
+  if (!n || !b || !s.goal) { el.innerHTML = '<div class="muted">' + (s.goal ? 'Waiting for the first networth reading.' : 'Set a profit goal and deadline in Setup to see your progress.') + '</div>'; return; }
+  const money = v => (v < 0 ? '-$' : '$') + fmt(Math.abs(v));
+  const now = nwTotal(n.values), start = nwTotal(b.values);
+  const gain = now - start;
+  const left = Math.max(0, s.goal - gain);
+  const daysLeft = Math.max(0, Math.ceil((new Date(s.deadline + 'T00:00:00Z').getTime() - Date.now()) / 86400000));
+  const need = left / Math.max(1, daysLeft);
+  const pace = gain / Math.max(1, (n.ts - b.ts) / 86400);
+  const projected = gain + pace * daysLeft;
+  const pct = Math.min(100, Math.max(0, gain / s.goal * 100));
+  const ok = projected >= s.goal;
+  const tile = (label, val, cls) => '<div><div class="muted">' + label + '</div><div class="tile ' + (cls || '') + '">' + val + '</div></div>';
+  el.innerHTML =
+    '<div style="height:10px;background:var(--line);border-radius:5px;margin-bottom:12px"><div style="width:' + pct.toFixed(1) +
+    '%;height:100%;background:var(--accent);border-radius:5px"></div></div>' +
+    '<div class="tiles">' +
+    tile('Profit goal', money(s.goal)) + tile('Profit so far', money(gain), gain >= 0 ? 'good' : 'bad') + tile('Left to go', money(left)) +
+    tile('Days left', fmt(daysLeft)) + tile('Needed per day', money(need)) +
+    tile('Your pace per day', money(pace), pace >= 0 ? 'good' : 'bad') +
+    tile('Projected profit at deadline', money(projected), ok ? 'good' : 'bad') + '</div>' +
+    '<div class="muted" style="margin-top:10px">' + (left === 0 ? 'Goal reached.' : ok ? 'On track at your current pace.' : 'Behind: you would finish about ' + money(s.goal - projected) + ' short at your current pace.') +
+    ' Pace is measured from your first reading and gets more reliable after a few days. Bank interest and dividends show up in networth when Torn updates it.</div>';
+}
+
+async function pollInventoryV2() {
+  const key = encodeURIComponent(data.settings.key);
+  if (!idsTried) { idsTried = true; await loadIds(key); }
+  const ids = Object.assign({ plushy: 269, flower: 271 }, data.ids || {});
+  const counts = { plushy: 0, flower: 0, edvd: 0, drugpack: 0 };
+  const notes = [];
+  let diag = '';
+  for (const cat of ['Plushie', 'Flower', 'Other', 'Supply Pack', 'Special']) {
+    const core = cat === 'Plushie' || cat === 'Flower';
+    try {
+      const j = await (await fetch('https://api.torn.com/v2/user/inventory?cat=' + encodeURIComponent(cat) + '&key=' + key)).json();
+      diag += cat + ': ' + JSON.stringify(j).slice(0, 200) + '\n';
+      if (j.error) { if (core) notes.push(cat + ': ' + j.error.error); continue; }
+      const list = [];
+      collectItems(j, list);
+      list.forEach(e => Object.keys(NAMES).forEach(w => { if (e.id === ids[w] || e.name === NAMES[w]) counts[w] += e.qty; }));
+    } catch (err) { if (core) notes.push(cat + ': could not connect'); }
+  }
+  invDiag = diag;
+  if (notes.length) { invError = 'Could not read inventory (' + notes.join('; ') + ').'; return; }
+
+  const prev = data.inv;
+  const s = data.settings;
+  const now = { ts: nowSec(), plushy: counts.plushy, flower: counts.flower, edvd: counts.edvd, drugpack: counts.drugpack };
+  now.worth = (now.plushy + now.flower) * s.sell + now.edvd * s.edvd + now.drugpack * s.drugpack;
+  now.peak = Math.max((prev && prev.peak) || 0, now.plushy + now.flower);
+  now.peakWorth = Math.max((prev && prev.peakWorth) || 0, now.worth);
+  now.since = (prev && prev.since) || now.ts;
+  const had = prev && prev.edvd !== undefined;
+  now.edvdGained = ((prev && prev.edvdGained) || 0) + (had ? Math.max(0, now.edvd - prev.edvd) : 0);
+  now.dpGained = ((prev && prev.dpGained) || 0) + (had ? Math.max(0, now.drugpack - prev.drugpack) : 0);
+  const t = latestTrip();
+  if (prev && t && nowSec() - t.departed < 4 * 3600) {
+    const dp = now.plushy - prev.plushy, df = now.flower - prev.flower;
+    if (dp > 0 || df > 0) {
+      t.auto = t.auto || { plushy: 0, flower: 0 };
+      if (dp > 0) t.auto.plushy += dp;
+      if (df > 0) t.auto.flower += df;
+      t.qty = t.auto.plushy + t.auto.flower;
+      t.item = t.auto.plushy && t.auto.flower ? 'mixed' : (t.auto.plushy ? 'plushy' : 'flower');
+    }
+  }
+  data.inv = now;
+  invError = '';
+  saveData();
+}
+
+function tripCost(x, costOf) {
+  const s = data.settings;
+  return x.auto ? x.auto.plushy * s.plushy + x.auto.flower * s.flower : x.qty * costOf(x.item);
+}
+
+function renderHoldings() {
+  const n = data.inv, s = data.settings;
+  const set = (id, v) => { document.getElementById(id).textContent = v; };
+  if (n) {
+    set('h-plushy', fmt(n.plushy));
+    set('h-flower', fmt(n.flower));
+    const e = n.edvd || 0, d = n.drugpack || 0;
+    const worth = n.worth || (n.plushy + n.flower) * s.sell;
+    const days = Math.max(1, (n.ts - (n.since || n.ts)) / 86400);
+    set('h-edvd', fmt(e));
+    set('h-dp', fmt(d));
+    set('h-total', fmt(n.plushy + n.flower + e + d));
+    set('h-worth', '$' + fmt(worth));
+    set('h-edvd-day', ((n.edvdGained || 0) / days).toFixed(1));
+    set('h-all', '$' + fmt(worth + s.invest));
+  }
+  set('h-invest', '$' + fmt(s.invest));
+  let note = n ? 'Last read ' + new Date(n.ts * 1000).toLocaleTimeString() + '. Worth uses your sell value of $' + fmt(s.sell) + ' per item.' : 'Waiting for the first inventory reading.';
+  if (invError) note += ' ' + invError + ' Use the Plushies / Flowers buttons meanwhile.';
+  set('h-note', note);
+  set('h-diag', invDiag || 'Nothing to show yet.');
+}
+
+async function pollNetworth() {
+  try {
+    const r = await fetch('https://api.torn.com/user/?selections=networth&key=' + encodeURIComponent(data.settings.key));
+    const j = await r.json();
+    if (j.error) { nwError = 'Networth unavailable: ' + j.error.error; return; }
+    const vals = {};
+    Object.keys(j.networth || {}).forEach(k => {
+      if (typeof j.networth[k] === 'number' && /^\w+$/.test(k) && k !== 'parsetime' && k !== 'timestamp') vals[k] = j.networth[k];
+    });
+    if (vals.total === undefined) { nwError = 'Networth unavailable: no total returned.'; return; }
+    nwError = '';
+    data.nw = { ts: nowSec(), values: vals };
+    if (!data.baseline) data.baseline = { ts: nowSec(), values: vals };
+    saveData();
+  } catch (e) { nwError = 'Networth check failed (will retry).'; }
+}
+
+function resetBaseline() {
+  if (!data.nw) { setStatus('No networth reading yet.', true); return; }
+  if (!confirm('Restart the networth comparison from right now?')) return;
+  data.baseline = { ts: nowSec(), values: data.nw.values };
+  saveData();
+  render();
+}
+
+/* ---------- actions ---------- */
+function latestTrip() {
+  return data.trips.reduce((a, b) => (!a || b.departed > a.departed ? b : a), null);
+}
+
+function setItem(item) {
+  const t = latestTrip();
+  if (!t) { setStatus('No trip to update yet. Use "Add a missed trip".', true); return; }
+  t.item = item;
+  delete t.auto;
+  const q = document.getElementById('qty').value;
+  if (q !== '') t.qty = Math.max(0, Number(q) || 0);
+  document.getElementById('qty').value = '';
+  saveData();
+  render();
+}
+
+function addTrip() {
+  data.trips.push({ departed: nowSec(), destination: 'Argentina', item: null, qty: data.settings.capacity });
+  saveData();
+  render();
+}
+
+function removeLatest() {
+  const t = latestTrip();
+  if (!t) return;
+  if (!confirm('Remove the latest trip?')) return;
+  data.trips = data.trips.filter(x => x !== t);
+  saveData();
+  render();
+}
+
+function addSale() {
+  const el = document.getElementById('payout');
+  const amount = Number(el.value.replace(/[,\s$]/g, ''));
+  if (!amount || amount < 0) { setStatus('Type the payout amount first.', true); return; }
+  const lastSale = data.sales.reduce((m, x) => Math.max(m, x.ts), 0);
+  const tripItems = data.trips.filter(x => x.departed > lastSale).reduce((n, x) => n + x.qty, 0);
+  const typed = Number(document.getElementById('payout-items').value);
+  const items = typed > 0 ? typed : (data.inv && data.inv.peak ? data.inv.peak : tripItems);
+  document.getElementById('payout-items').value = '';
+  data.sales.push({ ts: nowSec(), amount, items, est: data.inv ? data.inv.peakWorth || 0 : 0 });
+  if (data.inv) {
+    data.inv.peak = data.inv.plushy + data.inv.flower;
+    data.inv.peakWorth = data.inv.worth || 0;
+  }
+  el.value = '';
+  saveData();
+  setStatus('Payout recorded.');
+  render();
+}
+
+/* ---------- backup ---------- */
+function downloadBackup() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'torn-tracker-backup-' + dayOf(nowSec()) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function restoreBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const d = JSON.parse(reader.result);
+      if (!Array.isArray(d.trips)) throw new Error('bad file');
+      if (!confirm('Replace your current data with this backup?')) return;
+      data = {
+        settings: Object.assign({}, DEFAULTS.settings, d.settings),
+        trips: d.trips,
+        sales: d.sales || [],
+        baseline: d.baseline || null,
+        nw: d.nw || null,
+        inv: d.inv || null,
+        invSource: d.invSource || null,
+        ids: d.ids || null,
+        wars: d.wars || []
+      };
+      saveData();
+      fillSettings();
+      render();
+      setStatus('Backup restored.');
+    } catch (e) { setStatus('That file is not a valid backup.', true); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+/* ---------- display ---------- */
+function render() {
+  const s = data.settings;
+  const costOf = item => item === 'plushy' ? s.plushy : item === 'flower' ? s.flower : Math.max(s.plushy, s.flower);
+
+  // latest trip
+  const t = latestTrip();
+  const latestEl = document.getElementById('latest');
+  if (t) {
+    const when = new Date(t.departed * 1000).toLocaleString();
+    const label = { plushy: 'plushies', flower: 'flowers', mixed: 'plushies + flowers' }[t.item];
+    const what = t.item ? label + ' x' + t.qty + (t.auto ? ' (auto)' : '') : 'item not set yet';
+    latestEl.textContent = t.destination + ' - ' + when + ' - ' + what;
+  } else {
+    latestEl.textContent = 'No trips yet.';
+  }
+
+  // stock
+  const lastSale = data.sales.reduce((m, x) => Math.max(m, x.ts), 0);
+  const tripWaiting = data.trips.filter(x => x.departed > lastSale).reduce((n, x) => n + x.qty, 0);
+  const waiting = data.inv ? data.inv.plushy + data.inv.flower + (data.inv.edvd || 0) + (data.inv.drugpack || 0) : tripWaiting;
+  document.getElementById('stock').textContent = fmt(waiting) + ' items';
+  document.getElementById('stock-value').textContent = 'Worth about $' + fmt(data.inv && data.inv.worth ? data.inv.worth : waiting * s.sell);
+
+  // report
+  const days = Number(document.getElementById('range').value);
+  const cutoff = dayOf(nowSec() - (days - 1) * 86400);
+  const rows = {};
+  let unset = 0;
+  data.trips.forEach(x => {
+    const d = dayOf(x.departed);
+    if (d < cutoff) return;
+    const r = rows[d] || (rows[d] = { trips: 0, items: 0, cost: 0 });
+    if (!x.item) unset++;
+    r.trips++;
+    r.items += x.qty;
+    r.cost += tripCost(x, costOf);
+  });
+
+  const tot = { trips: 0, items: 0, cost: 0, flights: 0, value: 0, profit: 0 };
+  let body = '';
+  Object.keys(rows).sort().reverse().forEach(d => {
+    const r = rows[d];
+    const flights = r.trips * s.flight;
+    const value = r.items * s.sell;
+    const profit = value - r.cost - flights;
+    tot.trips += r.trips; tot.items += r.items; tot.cost += r.cost;
+    tot.flights += flights; tot.value += value; tot.profit += profit;
+    body += '<tr><td>' + d + '</td><td>' + r.trips + '</td><td>' + fmt(r.items) + '</td><td>' + fmt(r.cost) +
+      '</td><td>' + fmt(flights) + '</td><td>' + fmt(value) + '</td><td class="' + (profit >= 0 ? 'good' : 'bad') + '">' + fmt(profit) + '</td></tr>';
+  });
+
+  const table = document.getElementById('report');
+  if (!body) {
+    table.innerHTML = '<tr><td class="muted" style="text-align:left">No trips recorded in this period.</td></tr>';
+  } else {
+    table.innerHTML =
+      '<thead><tr><th>Day</th><th>Trips</th><th>Items</th><th>Item cost</th><th>Flights</th><th>Est. value</th><th>Est. profit</th></tr></thead>' +
+      '<tbody>' + body + '</tbody>' +
+      '<tfoot><tr><td>Total</td><td>' + tot.trips + '</td><td>' + fmt(tot.items) + '</td><td>' + fmt(tot.cost) +
+      '</td><td>' + fmt(tot.flights) + '</td><td>' + fmt(tot.value) + '</td><td class="' + (tot.profit >= 0 ? 'good' : 'bad') + '">' + fmt(tot.profit) + '</td></tr></tfoot>';
+  }
+
+  const paid = data.sales.filter(x => dayOf(x.ts) >= cutoff).reduce((n, x) => n + x.amount, 0);
+  let notes = 'Trader payouts received in this period: $' + fmt(paid) + '.';
+  if (unset) notes += ' ' + unset + ' trip(s) have no item set and are costed as flowers (the pricier one).';
+  document.getElementById('report-notes').textContent = notes;
+  renderTotals(costOf);
+  renderHoldings();
+  renderGoal();
+  renderWars();
+}
+
+function renderTotals(costOf) {
+  const s = data.settings;
+  const money = n => (n < 0 ? '-$' : '$') + fmt(Math.abs(n));
+  const sign = n => (n >= 0 ? 'good' : 'bad');
+  const days = {};
+  let items = 0, cost = 0;
+  data.trips.forEach(x => {
+    const d = dayOf(x.departed);
+    const r = days[d] || (days[d] = { trips: 0, profit: 0 });
+    const c = tripCost(x, costOf);
+    items += x.qty;
+    cost += c;
+    r.trips++;
+    r.profit += x.qty * s.sell - c - s.flight;
+  });
+  const dayKeys = Object.keys(days);
+  const trips = data.trips.length;
+  const flights = trips * s.flight;
+  const profit = items * s.sell - cost - flights;
+  const paid = data.sales.reduce((n, x) => n + x.amount, 0);
+  const soldItems = data.sales.reduce((n, x) => n + (x.items || 0), 0);
+  const paidWithItems = data.sales.reduce((n, x) => n + (x.items ? x.amount : 0), 0);
+  const best = dayKeys.reduce((a, d) => (a === null || days[d].profit > days[a].profit ? d : a), null);
+  const worst = dayKeys.reduce((a, d) => (a === null || days[d].profit < days[a].profit ? d : a), null);
+  const b = data.baseline, n = data.nw;
+
+  const tiles = [];
+  const add = (label, val, cls) => tiles.push('<div><div class="muted">' + label + '</div><div class="tile ' + (cls || '') + '">' + val + '</div></div>');
+  if (n && b) {
+    const gain = nwTotal(n.values) - nwTotal(b.values);
+    const span = Math.max(1, (n.ts - b.ts) / 86400);
+    add('Networth at start (no stocks)', money(nwTotal(b.values)));
+    add('Networth now (no stocks)', money(nwTotal(n.values)));
+    add('Networth gained', money(gain), sign(gain));
+    add('Networth gain per day', money(gain / span), sign(gain));
+  }
+  add('Trips made', fmt(trips));
+  add('Active days', fmt(dayKeys.length));
+  add('Trips per active day', dayKeys.length ? (trips / dayKeys.length).toFixed(1) : '0');
+  add('Items bought', fmt(items));
+  add('Money spent on items', money(cost));
+  add('Money spent on flights', money(flights));
+  add('Total money used', money(cost + flights));
+  add('Est. value of items', money(items * s.sell));
+  add('Est. profit', money(profit), sign(profit));
+  add('Est. profit per trip', money(trips ? profit / trips : 0));
+  add('Received from trader', money(paid));
+  add('Net cash so far', money(paid - cost - flights), sign(paid - cost - flights));
+  const est = data.sales.reduce((n, x) => n + (x.est || 0), 0);
+  const estPaid = data.sales.reduce((n, x) => n + (x.est ? x.amount : 0), 0);
+  add('Received vs estimated', est ? (estPaid / est * 100).toFixed(1) + '%' : 'n/a');
+  add('Best day', best ? best + ' (' + money(days[best].profit) + ')' : 'n/a');
+  add('Worst day', worst ? worst + ' (' + money(days[worst].profit) + ')' : 'n/a');
+  document.getElementById('totals').innerHTML = tiles.join('');
+
+  const starts = data.trips.map(x => x.departed).concat(b ? [b.ts] : []);
+  let note = starts.length ? 'Tracking since ' + dayOf(Math.min.apply(null, starts)) + '.' : 'Nothing tracked yet.';
+  if (nwError) note += ' ' + nwError;
+  else if (!n) note += ' Waiting for the first networth reading.';
+  else note += ' Networth is a Torn-cached figure, so it can lag a few minutes.';
+  document.getElementById('totals-note').textContent = note;
+
+  const bt = document.getElementById('nw-table');
+  if (n && b) {
+    const keys = Object.keys(n.values).filter(k => k !== 'total' && k !== 'stockmarket' && k !== 'stocks' && (n.values[k] || b.values[k]));
+    bt.innerHTML = '<thead><tr><th>Category</th><th>Start</th><th>Now</th><th>Change</th></tr></thead><tbody>' +
+      keys.map(k => {
+        const st = b.values[k] || 0, cu = n.values[k] || 0, ch = cu - st;
+        return '<tr><td>' + k + '</td><td>' + fmt(st) + '</td><td>' + fmt(cu) + '</td><td class="' + sign(ch) + '">' + fmt(ch) + '</td></tr>';
+      }).join('') + '</tbody>';
+  } else {
+    bt.innerHTML = '<tr><td class="muted" style="text-align:left">Waiting for the first networth reading.</td></tr>';
+  }
+}
+
+/* ---------- start ---------- */
+fillSettings();
+if (!data.settings.key) document.getElementById('setup').open = true;
+render();
+poll();
+setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>
